@@ -87,3 +87,31 @@ Use --seed to fix randomness:
 "You should probably TRAIN this model..." and pooler init warnings are expected for ESM.
 They do not affect this fine-tuning pipeline.
 
+
+## 高性能推理（推荐）
+
+使用脚本：`scripts/predict_fast.py`，用于批量候选肽序列预测（输出 `Antimicrobial` + 4 子头概率）。
+
+### 推荐参数（RTX 4090 实测）
+- `--amp fp16`
+- `--batch_size 128`
+- `--sort_by_len 1`
+- `--num_workers 4`
+- `--chunk_size 50000`
+- `--resume 1`
+
+### 输入 CSV 要求
+- 必需列：`Sequence`
+- 可选列：`Hash`（推荐，若缺失则使用行号作为 `seq_id`）
+- 若列名不同，可用：`--seq_col`、`--id_col`
+
+### chunk / resume 用法
+- `--chunk_size`：按块处理大 CSV，降低内存占用（如 `50000`）。
+- `--resume 1`：支持断点续跑，会跳过已完成 chunk。
+- 若修改 `amp` / `batch_size` / `sort_by_len` 等关键参数，请更换 `--pred_out` 文件名，避免误复用旧 chunk。
+
+### 推荐命令（Test.csv 示例）
+`python scripts/predict_fast.py --ckpt_dir runs/student35m_distill_sampler_subpos_a2_ls03_pw20_rerun/best --base_model_dir /root/work_runtime/models/esm2_t12_35M_UR50D --data_dir /root/work_runtime/data/dataverse_files --csv Test.csv --pred_out runs/predictions/test_fast_fp16_bs128_sort1.csv --batch_size 128 --num_workers 4 --amp fp16 --sort_by_len 1 --chunk_size 50000 --resume 1 --include_labels 1 --thr_any 0.95 --summary_out runs/predictions/test_fast_fp16_bs128_sort1_summary.json`
+
+### 自定义候选文件（无标签）
+将 `--in_csv /path/to/candidates.csv` 替换为真实路径；建议先按 `pred_any` 或 `p_Antimicrobial` 筛选，再按 `p_Antibacterial / p_Antifungal / p_Antiviral` 排序。
